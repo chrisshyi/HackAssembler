@@ -75,10 +75,11 @@ impl Decode for CDecoder {
     fn decode(&self, instruct_fields: Vec<&str>, info_map: &HashMap<&str, bool>) -> String {
         let mut instruct_str = String::new();
         let mut comp_index = 0; // the index of the comp instruction in the vector
+        // binary forms of the 3 fields
         let dest_bin: String;
         let comp_bin: String;
         let jump_bin: String;
-
+        // if dest is specified, it would be the first field
         if *info_map.get("dest").unwrap() {
             let dest = instruct_fields.get(0).unwrap().to_string();
             dest_bin = self.dest_map.get(&dest).unwrap().to_string();
@@ -88,6 +89,7 @@ impl Decode for CDecoder {
         }
         let comp = instruct_fields.get(comp_index).unwrap().to_string();
         let comp_bin = self.comp_map.get(&comp).unwrap().clone().to_string();
+        // if jump is specified, it would be the last field
         if *info_map.get("jump").unwrap() {
             let jump = instruct_fields.get(instruct_fields.len() - 1).unwrap().to_string();
             jump_bin = self.jump_map.get(&jump).unwrap().clone().to_string();
