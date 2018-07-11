@@ -75,9 +75,9 @@ impl Decode for CDecoder {
     fn decode(&self, instruct_fields: Vec<&str>, info_map: &HashMap<&str, bool>) -> String {
         let mut instruct_str = String::new();
         let mut comp_index = 0; // the index of the comp instruction in the vector
-        let mut dest_bin: String;
-        let mut comp_bin: String;
-        let mut jump_bin: String;
+        let dest_bin: String;
+        let comp_bin: String;
+        let jump_bin: String;
 
         if *info_map.get("dest").unwrap() {
             let dest = instruct_fields.get(0).unwrap().to_string();
@@ -114,7 +114,7 @@ impl Decode for CDecoder {
 /// with additional information (whether dest and jump were set, A instruction or C instruction) 
 /// 
 pub fn parse_line(line: &str) -> (Vec<&str>, HashMap<&str, bool>) {
-    let mut a_instruction: bool; // true if line is an A instruction
+    let a_instruction: bool; // true if line is an A instruction
     let mut split_line: Vec<&str>;
     let mut dest = true; 
     let mut jump = true;
@@ -225,5 +225,59 @@ mod tests {
     fn a_decode_test_2() {
         let decoder = ADecoder::new();
         assert_eq!(&decoder.decode(vec!["100"], &HashMap::new()), "01100100");
+    }
+
+    /// setup function for CDecoder
+    fn c_decoder_setup() -> CDecoder {
+        let dest_file = File::open("dest_file.txt").unwrap();
+        let comp_file = File::open("comp_file.txt").unwrap();
+        let jump_file = File::open("jump_file.txt").unwrap();
+
+        CDecoder::new(dest_file, comp_file, jump_file)
+    }
+
+    #[test]
+    fn c_decode_no_jump() {
+        let decoder = c_decoder_setup();
+        let mut info_map = HashMap::new();
+        info_map.insert("dest", true);
+        info_map.insert("jump", false);
+        assert_eq!(&decoder.decode(vec!["MD", "D+1"], &info_map), "1110011111011000");
+    }
+
+    #[test]
+    fn c_decode_no_jump_and_no_dest() {
+        let decoder = c_decoder_setup();
+        let mut info_map = HashMap::new();
+        info_map.insert("dest", false);
+        info_map.insert("jump", false);
+        assert_eq!(&decoder.decode(vec!["D+1"], &info_map), "1110011111000000");
+    }
+
+    #[test]
+    fn c_decode_no_dest() {
+        let decoder = c_decoder_setup();
+        let mut info_map = HashMap::new();
+        info_map.insert("dest", false);
+        info_map.insert("jump", true);
+        assert_eq!(&decoder.decode(vec!["D+1", "JLE"], &info_map), "1110011111000110");
+    }
+
+    #[test]
+    fn c_decode_m_not_a() {
+        let decoder = c_decoder_setup();
+        let mut info_map = HashMap::new();
+        info_map.insert("dest", true);
+        info_map.insert("jump", true);
+        assert_eq!(&decoder.decode(vec!["M", "M+1", "JEQ"], &info_map), "1111110111001010");
+    }
+
+    #[test]
+    fn c_decode_unconditional_jump() {
+        let decoder = c_decoder_setup();
+        let mut info_map = HashMap::new();
+        info_map.insert("dest", false);
+        info_map.insert("jump", true);
+        assert_eq!(&decoder.decode(vec!["0", "JMP"], &info_map), "1110101010000111");
     }
 }
