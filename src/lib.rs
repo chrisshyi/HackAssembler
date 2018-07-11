@@ -26,7 +26,7 @@ impl Decode for ADecoder {
         let mut instruct_str = String::new();
         instruct_str.push('0'); // push the op code
         let address: i32 = (*(instruct_fields.get(0).unwrap())).parse::<i32>().unwrap();
-        instruct_str.push_str(format!("{:b}", address).as_str());
+        instruct_str.push_str(format!("{:015b}", address).as_str()); // pad with zeros to make a width of 15 bits
         instruct_str
     }
 }
@@ -218,13 +218,13 @@ mod tests {
     #[test]
     fn a_decode_test() {
         let decoder = ADecoder::new();
-        assert_eq!(&decoder.decode(vec!["4"], &HashMap::new()), "0100");
+        assert_eq!(&decoder.decode(vec!["4"], &HashMap::new()), "0000000000000100");
     }
 
     #[test]
     fn a_decode_test_2() {
         let decoder = ADecoder::new();
-        assert_eq!(&decoder.decode(vec!["100"], &HashMap::new()), "01100100");
+        assert_eq!(&decoder.decode(vec!["100"], &HashMap::new()), "0000000001100100");
     }
 
     /// setup function for CDecoder
