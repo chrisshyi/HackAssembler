@@ -116,14 +116,12 @@ impl Decode for CDecoder {
 /// with additional information (whether dest and jump were set, A instruction or C instruction) 
 /// 
 pub fn parse_line(line: &str) -> (Vec<&str>, HashMap<&str, bool>) {
-    let a_instruction: bool; // true if line is an A instruction
     let mut split_line: Vec<&str>;
     let mut dest = true; 
     let mut jump = true;
     let mut info_map = HashMap::new();
 
     if line.starts_with('@') {
-        a_instruction = true;
         let trimmed_line = line.trim_left_matches("@");
         split_line = trimmed_line.split(" ").collect();
         if split_line.len() > 1 {
@@ -131,7 +129,6 @@ pub fn parse_line(line: &str) -> (Vec<&str>, HashMap<&str, bool>) {
         }
         info_map.insert("a_instruction", true);
     } else {
-        a_instruction = false;
         let mut max_c_fields = 3; // C instructions have a maximum of 3 fields, but dest and jump are optional
         if !line.contains('=') {
             max_c_fields -= 1;
