@@ -1,4 +1,3 @@
-use std::fmt;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, BufRead};
@@ -88,7 +87,7 @@ impl Decode for CDecoder {
             dest_bin = "000".to_string();
         }
         let comp = instruct_fields.get(comp_index).unwrap().to_string();
-        let comp_bin = self.comp_map.get(&comp).unwrap().clone().to_string();
+        comp_bin = self.comp_map.get(&comp).unwrap().clone().to_string();
         // if jump is specified, it would be the last field
         if *info_map.get("jump").unwrap() {
             let jump = instruct_fields.get(instruct_fields.len() - 1).unwrap().to_string();
@@ -115,7 +114,7 @@ impl Decode for CDecoder {
 /// * (split_line, info_map) - the split line along with a HashMap 
 /// with additional information (whether dest and jump were set, A instruction or C instruction) 
 /// 
-pub fn parse_line(line: &str) -> (Vec<&str>, HashMap<&str, bool>) {
+pub fn parse_line<'a>(line: &'a str) -> (Vec<&'a str>, HashMap<&'static str, bool>) {
     let mut split_line: Vec<&str>;
     let mut dest = true; 
     let mut jump = true;
@@ -158,7 +157,7 @@ impl SymbolTable {
         let  buf_reader = BufReader::new(predef_file);
         let mut symbol_map = HashMap::new();
         for line in buf_reader.lines() {
-            let split_line: Vec<String> = line.unwrap().as_str().split(" ").map(|s| s.to_string()).collect();
+            let split_line: Vec<String> = line.unwrap().split(" ").map(|s| s.to_string()).collect();
             let symbol = (*(split_line.get(0).unwrap())).clone();
             let num = split_line.get(1).unwrap().parse::<i32>().unwrap();
             symbol_map.insert(symbol, num);
@@ -181,7 +180,7 @@ impl SymbolTable {
             if unwrapped_line.starts_with('(') {
                 let split_line: Vec<&str> = unwrapped_line.split(|c| c == '(' || c ==')' || c == ' ').collect(); 
                 let label = (*(split_line.get(0).unwrap())).to_string();
-                if !self.symbol_map.contains_key(label) {
+                if !self.symbol_map.contains_key(&label) {
                     self.symbol_map.insert(label.clone(), line_num + 1);
                 }
             } 
