@@ -147,6 +147,52 @@ pub fn parse_line(line: &str) -> (Vec<&str>, HashMap<&str, bool>) {
     (split_line, info_map)
 }
 
+pub struct SymbolTable {
+    symbol_map: HashMap<String, i32>
+}
+
+impl SymbolTable {
+    /// Initializes a new SymbolTable using the file of
+    /// predefined symbols
+    fn new(predef_file: File) -> SymbolTable {
+        let  buf_reader = BufReader::new(predef_file);
+        let mut symbol_map = HashMap::new();
+        for line in buf_reader.lines() {
+            let split_line: Vec<String> = line.unwrap().as_str().split(" ").map(|s| s.to_string()).collect();
+            let symbol = (*(split_line.get(0).unwrap())).clone();
+            let num = split_line.get(1).unwrap().parse::<i32>().unwrap();
+            symbol_map.insert(symbol, num);
+        }
+        SymbolTable {
+            symbol_map: symbol_map
+        }
+    }
+
+    /// Makes a pass through the assembly code file
+    /// and processes symbols
+    fn parse_symbols(&mut self, asm_file: File) {
+        let buf_reader = BufReader::new(asm_file);
+        let mut line_num = 0;
+        for line in buf_reader.lines() {
+            let unwrapped_line = line.unwrap();
+            if unwrapped_line.is_empty() {
+                continue;
+            }
+            if unwrapped_line.starts_with('(') {
+                let split_line: Vec<&str> = unwrapped_line.split(|c| c == '(' || c ==')' || c == ' ').collect(); 
+                let label = (*(split_line.get(0).unwrap())).to_string();
+                if !self.symbol_map.contains_key(label) {
+                    self.symbol_map.insert(label.clone(), line_num + 1);
+                }
+            } 
+            if unwrapped_line.starts_with('@') {
+
+            }
+
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
