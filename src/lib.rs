@@ -169,25 +169,34 @@ impl SymbolTable {
 
     /// Makes a pass through the assembly code file
     /// and processes symbols
-    fn parse_symbols(&mut self, asm_file: File) {
+    fn parse_file(&self, asm_file: File) {
         let buf_reader = BufReader::new(asm_file);
+        // TODO: When to increment line_num?
         let mut line_num = 0;
         for line in buf_reader.lines() {
             let unwrapped_line = line.unwrap();
             if unwrapped_line.is_empty() {
                 continue;
             }
-            if unwrapped_line.starts_with('(') {
-                let split_line: Vec<&str> = unwrapped_line.split(|c| c == '(' || c ==')' || c == ' ').collect(); 
-                let label = (*(split_line.get(0).unwrap())).to_string();
-                if !self.symbol_map.contains_key(&label) {
-                    self.symbol_map.insert(label.clone(), line_num + 1);
-                }
-            } 
-            if unwrapped_line.starts_with('@') {
+            self.parse_symbol_in_line(unwrapped_line.as_str(), line_num);
+            line_num += 1;
+        }
+    }
 
+    fn parse_symbol_in_line(&mut self, line: &str, line_num: i32) {
+        if line.starts_with('(') {
+            let split_line: Vec<&str> = line.split(|c| c == '(' || c ==')' || c == ' ').collect(); 
+            let label = split_line[0].to_string(); // The first token contains the symbol 
+            if !self.symbol_map.contains_key(&label) {
+                self.symbol_map.insert(label, line_num + 1); // consume the label
             }
-
+        } 
+        if line.starts_with('@') {
+            let split_line: Vec<&str> = line.split(|c| c == '@' || c == ' ').collect();
+            let variable = split_line[0].to_string();
+            if !self.symbol_map.contains_key(&variable) {
+                self.symbol_map.insert(variable, line_num); // consume the variable
+            }
         }
     }
 }
