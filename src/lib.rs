@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, BufRead};
+use std::io::{BufReader, BufWriter, BufRead, Seek, SeekFrom};
 
 pub trait Decode {
     /// Generates the binary representation of an instruction using its fields
@@ -162,6 +162,10 @@ impl SymbolTable {
             let num = split_line.get(1).unwrap().parse::<i32>().unwrap();
             symbol_map.insert(symbol, num);
         }
+        for num in 0..16 {
+            let r_symbol_str = format!("R{}", num);
+            symbol_map.insert(r_symbol_str, num);
+        }
         SymbolTable {
             symbol_map: symbol_map
         }
@@ -169,35 +173,76 @@ impl SymbolTable {
 
     /// Makes a pass through the assembly code file
     /// and processes symbols
-    fn parse_file(&self, asm_file: File) {
-        let buf_reader = BufReader::new(asm_file);
-        // TODO: When to increment line_num?
+    fn parse_file(&mut self, mut asm_file: File) {
+        let buf_reader = BufReader::new(asm_file.try_clone().unwrap());
         let mut line_num = 0;
+        let mut next_mem = 16;
+        // parse label symbols first
         for line in buf_reader.lines() {
             let unwrapped_line = line.unwrap();
             if unwrapped_line.is_empty() {
                 continue;
             }
-            self.parse_symbol_in_line(unwrapped_line.as_str(), line_num);
-            line_num += 1;
+            line_num = self.parse_label_in_line(unwrapped_line.as_str(), line_num);
+        }
+        asm_file.seek(SeekFrom::Start(0)); // seek back to the beginning of the file
+        let buf_reader = BufReader::new(asm_file.try_clone().unwrap());
+        for line in buf_reader.lines() {
+            let unwrapped_line = line.unwrap();
+            if unwrapped_line.is_empty() {
+                continue;
+            }
+            next_mem = self.parse_variable_in_line(unwrapped_line.as_str(), next_mem)
         }
     }
-
-    fn parse_symbol_in_line(&mut self, line: &str, line_num: i32) {
+    ///
+    /// Parses the label symbols in a line of instruction 
+    /// 
+    /// Arguments:
+    /// 
+    /// line: the line string 
+    /// line_num: the current line number, used for processing label symbols
+    /// 
+    /// Returns: the mutated line_num 
+    fn parse_label_in_line(&mut self, line: &str, mut line_num: i32) -> i32 {
+        // Assume that instruction lines would not start with an empty space
+        if line.starts_with(|c| c == ' ' || c == '/') {
+            return line_num;
+        }
         if line.starts_with('(') {
             let split_line: Vec<&str> = line.split(|c| c == '(' || c ==')' || c == ' ').collect(); 
-            let label = split_line[0].to_string(); // The first token contains the symbol 
+            let label = split_line[1].to_string(); // The second token contains the symbol 
             if !self.symbol_map.contains_key(&label) {
-                self.symbol_map.insert(label, line_num + 1); // consume the label
+                self.symbol_map.insert(label, line_num); // consume the label
             }
+            return line_num;
         } 
+        line_num += 1;
+        line_num 
+    }
+    ///
+    /// Parses variable symbols in a line of instruction
+    /// 
+    /// Arguments:
+    /// 
+    /// line: the line literal
+    /// next_mem: the next available memory location
+    /// 
+    /// Returns: the mutated next available memory location
+    fn parse_variable_in_line(&mut self, line: &str, mut next_mem: i32) -> i32 {
+        // Assume that instruction lines would not start with an empty space
+        if line.starts_with(|c| c == ' ' || c == '/') {
+            return next_mem;
+        }
         if line.starts_with('@') {
             let split_line: Vec<&str> = line.split(|c| c == '@' || c == ' ').collect();
-            let variable = split_line[0].to_string();
+            let variable = split_line[1].to_string(); // second token contains the variable
             if !self.symbol_map.contains_key(&variable) {
-                self.symbol_map.insert(variable, line_num); // consume the variable
+                self.symbol_map.insert(variable, next_mem); // consume the variable
+                next_mem += 1;
             }
         }
+        next_mem
     }
 }
 
@@ -332,5 +377,50 @@ mod tests {
         info_map.insert("dest", false);
         info_map.insert("jump", true);
         assert_eq!(&decoder.decode(vec!["0", "JMP"], &info_map), "1110101010000111");
+    }
+
+    fn symbol_table_setup() -> SymbolTable {
+        let file = File::open("predefined_symbols.txt").unwrap();
+        SymbolTable::new(file)
+    }
+
+    #[test]
+    fn test_label_parsing() {
+        let mut symbol_table = symbol_table_setup();
+        symbol_table.parse_label_in_line("(END)", 10);
+        assert_eq!(*symbol_table.symbol_map.get(&"END".to_string()).unwrap(), 10);
+    }
+
+    #[test]
+    fn test_variable_parsing() {
+        let mut symbol_table = symbol_table_setup();
+        symbol_table.parse_variable_in_line("@start // start var", 10);
+        assert_eq!(*symbol_table.symbol_map.get(&"start".to_string()).unwrap(), 10);
+    }
+
+    #[test]
+    fn test_file_parsing() {
+        let mut symbol_table = symbol_table_setup();
+        let mut asm_file = File::open("symbol_test.txt").unwrap();
+        symbol_table.parse_file(asm_file);
+        assert_eq!(*symbol_table.symbol_map.get(&"sum".to_string()).unwrap(), 16);
+        assert_eq!(*symbol_table.symbol_map.get(&"HELLO".to_string()).unwrap(), 1);
+        assert_eq!(*symbol_table.symbol_map.get(&"i".to_string()).unwrap(), 17);
+        assert_eq!(*symbol_table.symbol_map.get(&"END".to_string()).unwrap(), 2);
+        assert_eq!(*symbol_table.symbol_map.get(&"blah".to_string()).unwrap(), 18);
+    }
+
+    
+    #[test]
+    fn test_file_parsing_2() {
+        let mut symbol_table = symbol_table_setup();
+        let mut asm_file = File::open("symbol_test_2.txt").unwrap();
+        symbol_table.parse_file(asm_file);
+        assert_eq!(*symbol_table.symbol_map.get(&"sum".to_string()).unwrap(), 17);
+        assert_eq!(*symbol_table.symbol_map.get(&"LOOP".to_string()).unwrap(), 4);
+        assert_eq!(*symbol_table.symbol_map.get(&"i".to_string()).unwrap(), 16);
+        assert_eq!(*symbol_table.symbol_map.get(&"STOP".to_string()).unwrap(), 8);
+        assert_eq!(*symbol_table.symbol_map.get(&"R0".to_string()).unwrap(), 0);
+        assert_eq!(*symbol_table.symbol_map.get(&"END".to_string()).unwrap(), 11);
     }
 }

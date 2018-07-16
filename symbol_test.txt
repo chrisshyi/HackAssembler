@@ -1,0 +1,7 @@
+@sum
+(HELLO)
+@i
+(END)
+@blah
+D=D+M
+M=D
