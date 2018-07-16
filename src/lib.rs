@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, BufRead, Seek, SeekFrom};
+use std::io::{BufReader, BufWriter, Write, BufRead, Seek, SeekFrom};
 
 pub trait Decode {
     /// Generates the binary representation of an instruction using its fields
@@ -171,9 +171,14 @@ impl SymbolTable {
         }
     }
 
-    /// Makes a pass through the assembly code file
+    /// Makes two passes through an assembly code file
     /// and processes symbols
-    fn parse_file(&mut self, mut asm_file: File) {
+    /// 
+    /// Arguments:
+    /// 
+    /// asm_file: the original assembly file before any processing
+    /// intm_file: the intermediate file with all symbols replaced, and white/comments lines removed
+    fn parse_file(&mut self, mut asm_file: File, mut intm_file: File) {
         let buf_reader = BufReader::new(asm_file.try_clone().unwrap());
         let mut line_num = 0;
         let mut next_mem = 16;
@@ -192,7 +197,7 @@ impl SymbolTable {
             if unwrapped_line.is_empty() {
                 continue;
             }
-            next_mem = self.parse_variable_in_line(unwrapped_line.as_str(), next_mem)
+            next_mem = self.parse_variable_in_line(unwrapped_line.as_str(), next_mem, intm_file.try_clone().unwrap())
         }
     }
     ///
@@ -227,20 +232,28 @@ impl SymbolTable {
     /// 
     /// line: the line literal
     /// next_mem: the next available memory location
+    /// intm_file: an intermediate file with symbols replaced and blank/comment lines removed
     /// 
     /// Returns: the mutated next available memory location
-    fn parse_variable_in_line(&mut self, line: &str, mut next_mem: i32) -> i32 {
+    fn parse_variable_in_line(&mut self, line: &str, mut next_mem: i32, mut intm_file: File) -> i32 {
         // Assume that instruction lines would not start with an empty space
-        if line.starts_with(|c| c == ' ' || c == '/') {
+        if line.starts_with(|c| c == ' ' || c == '/' || c == '(') {
             return next_mem;
         }
+        let mut writer = BufWriter::new(intm_file);
         if line.starts_with('@') {
             let split_line: Vec<&str> = line.split(|c| c == '@' || c == ' ').collect();
             let variable = split_line[1].to_string(); // second token contains the variable
+            let var_clone = variable.clone();
             if !self.symbol_map.contains_key(&variable) {
                 self.symbol_map.insert(variable, next_mem); // consume the variable
                 next_mem += 1;
             }
+            writer.write(format!("@{}\n", self.symbol_map.get(&var_clone).unwrap()).as_bytes());
+        } else {
+            let mut line_str = line.to_string();
+            line_str.push('\n');
+            writer.write(line_str.as_bytes());
         }
         next_mem
     }
@@ -394,7 +407,7 @@ mod tests {
     #[test]
     fn test_variable_parsing() {
         let mut symbol_table = symbol_table_setup();
-        symbol_table.parse_variable_in_line("@start // start var", 10);
+        symbol_table.parse_variable_in_line("@start // start var", 10, File::create("blah").unwrap());
         assert_eq!(*symbol_table.symbol_map.get(&"start".to_string()).unwrap(), 10);
     }
 
@@ -402,7 +415,8 @@ mod tests {
     fn test_file_parsing() {
         let mut symbol_table = symbol_table_setup();
         let mut asm_file = File::open("symbol_test.txt").unwrap();
-        symbol_table.parse_file(asm_file);
+        let mut intm_file = File::create("intm1.txt").unwrap();
+        symbol_table.parse_file(asm_file, intm_file);
         assert_eq!(*symbol_table.symbol_map.get(&"sum".to_string()).unwrap(), 16);
         assert_eq!(*symbol_table.symbol_map.get(&"HELLO".to_string()).unwrap(), 1);
         assert_eq!(*symbol_table.symbol_map.get(&"i".to_string()).unwrap(), 17);
@@ -415,7 +429,8 @@ mod tests {
     fn test_file_parsing_2() {
         let mut symbol_table = symbol_table_setup();
         let mut asm_file = File::open("symbol_test_2.txt").unwrap();
-        symbol_table.parse_file(asm_file);
+        let mut intm_file = File::create("intm2.txt").unwrap();
+        symbol_table.parse_file(asm_file, intm_file);
         assert_eq!(*symbol_table.symbol_map.get(&"sum".to_string()).unwrap(), 17);
         assert_eq!(*symbol_table.symbol_map.get(&"LOOP".to_string()).unwrap(), 4);
         assert_eq!(*symbol_table.symbol_map.get(&"i".to_string()).unwrap(), 16);
