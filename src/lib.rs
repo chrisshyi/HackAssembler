@@ -162,14 +162,6 @@ impl SymbolTable {
             let num = split_line.get(1).unwrap().parse::<i32>().unwrap();
             symbol_map.insert(symbol, num);
         }
-        // loading symbols from file doesn't work for some reason...need to investigate
-        symbol_map.insert("SP".to_string(), 0);
-        symbol_map.insert("LCL".to_string(), 1);
-        symbol_map.insert("ARG".to_string(), 2);
-        symbol_map.insert("THIS".to_string(), 3);
-        symbol_map.insert("THAT".to_string(), 4);
-        symbol_map.insert("SCREEN".to_string(), 16384);
-        symbol_map.insert("KBD".to_string(), 24576);
         for num in 0..16 {
             let r_symbol_str = format!("R{}", num);
             symbol_map.insert(r_symbol_str, num);

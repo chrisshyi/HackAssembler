@@ -9,7 +9,7 @@ fn main() {
     let dest_file = File::open("dest_file.txt").unwrap();
     let comp_file = File::open("comp_file.txt").unwrap();
     let jump_file = File::open("jump_file.txt").unwrap();
-    let predef_file = File::open("predefined_symbols.txt").unwrap();
+    let mut predef_file = File::open("predefined_symbols.txt").unwrap();
 
     let a_decoder = ADecoder::new();
     let c_decoder = CDecoder::new(dest_file, comp_file, jump_file);
@@ -17,6 +17,7 @@ fn main() {
     let asm_file_root = "/home/chris/Dropbox/nand2tetris/nand2tetris/projects/06";
     let file_paths = vec!["add/Add.asm", "max/Max.asm", "pong/Pong.asm", "rect/Rect.asm"];
     for file_path in file_paths.iter() {
+        predef_file.seek(SeekFrom::Start(0)); // rewind the file
         let mut symbol_table = SymbolTable::new(predef_file.try_clone().unwrap());
         if !symbol_table.symbol_map.contains_key(&"SCREEN".to_string()) {
             println!("Screen key doesn't exist.");
