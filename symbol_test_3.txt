@@ -1,0 +1,4 @@
+@SCREEN
+M=D
+@i
+A=M

@@ -147,14 +147,14 @@ pub fn parse_line<'a>(line: &'a str) -> (Vec<&'a str>, HashMap<&'static str, boo
 }
 
 pub struct SymbolTable {
-    symbol_map: HashMap<String, i32>
+    pub symbol_map: HashMap<String, i32>
 }
 
 impl SymbolTable {
     /// Initializes a new SymbolTable using the file of
     /// predefined symbols
-    fn new(predef_file: File) -> SymbolTable {
-        let  buf_reader = BufReader::new(predef_file);
+    pub fn new(predef_file: File) -> SymbolTable {
+        let buf_reader = BufReader::new(predef_file);
         let mut symbol_map = HashMap::new();
         for line in buf_reader.lines() {
             let split_line: Vec<String> = line.unwrap().split(" ").map(|s| s.to_string()).collect();
@@ -162,6 +162,14 @@ impl SymbolTable {
             let num = split_line.get(1).unwrap().parse::<i32>().unwrap();
             symbol_map.insert(symbol, num);
         }
+        // loading symbols from file doesn't work for some reason...need to investigate
+        symbol_map.insert("SP".to_string(), 0);
+        symbol_map.insert("LCL".to_string(), 1);
+        symbol_map.insert("ARG".to_string(), 2);
+        symbol_map.insert("THIS".to_string(), 3);
+        symbol_map.insert("THAT".to_string(), 4);
+        symbol_map.insert("SCREEN".to_string(), 16384);
+        symbol_map.insert("KBD".to_string(), 24576);
         for num in 0..16 {
             let r_symbol_str = format!("R{}", num);
             symbol_map.insert(r_symbol_str, num);
@@ -178,7 +186,7 @@ impl SymbolTable {
     /// 
     /// asm_file: the original assembly file before any processing
     /// intm_file: the intermediate file with all symbols replaced, and white/comments lines removed
-    fn parse_file(&mut self, mut asm_file: File, mut intm_file: File) {
+    pub fn parse_file(&mut self, mut asm_file: File, mut intm_file: File) {
         let buf_reader = BufReader::new(asm_file.try_clone().unwrap());
         let mut line_num = 0;
         let mut next_mem = 16;
@@ -237,7 +245,7 @@ impl SymbolTable {
     /// Returns: the mutated next available memory location
     fn parse_variable_in_line(&mut self, line: &str, mut next_mem: i32, mut intm_file: File) -> i32 {
         // Assume that instruction lines would not start with an empty space
-        if line.starts_with(|c| c == ' ' || c == '/' || c == '(') {
+        if line.starts_with(|c: char| c == ' ' || c == '/' || c == '(') {
             return next_mem;
         }
         let mut writer = BufWriter::new(intm_file);
@@ -245,12 +253,20 @@ impl SymbolTable {
             let split_line: Vec<&str> = line.split(|c| c == '@' || c == ' ').collect();
             let variable = split_line[1].to_string(); // second token contains the variable
             let var_clone = variable.clone();
-            if !self.symbol_map.contains_key(&variable) {
-                self.symbol_map.insert(variable, next_mem); // consume the variable
-                next_mem += 1;
+            if !variable.parse::<i32>().is_ok() { // if the variable isn't a number (i.e. setting an address)
+                if !self.symbol_map.contains_key(&variable) {
+                    self.symbol_map.insert(variable, next_mem); // consume the variable
+                    next_mem += 1;
+                    // write to the intermediate file with the symbol replced
+                }
+                writer.write(format!("@{}\n", self.symbol_map.get(&var_clone).unwrap()).as_bytes());
+            } else {
+                let mut line_str = line.to_string();
+                line_str.push('\n');
+                writer.write(line_str.as_bytes());
             }
-            writer.write(format!("@{}\n", self.symbol_map.get(&var_clone).unwrap()).as_bytes());
         } else {
+            // write the C instruction as is to the intermediate file
             let mut line_str = line.to_string();
             line_str.push('\n');
             writer.write(line_str.as_bytes());
@@ -412,6 +428,20 @@ mod tests {
     }
 
     #[test]
+    fn test_non_variable_parsing() {
+        let mut symbol_table = symbol_table_setup();
+        symbol_table.parse_variable_in_line("@10 // start var", 10, File::create("blah").unwrap());
+        assert_eq!(symbol_table.symbol_map.contains_key(&"10".to_string()), false);
+    }
+
+    #[test]
+    fn test_predefined_symbol() {
+        let mut symbol_table = symbol_table_setup();
+        assert_eq!(*symbol_table.symbol_map.get(&"SCREEN".to_string()).unwrap(), 16384);
+        assert_eq!(*symbol_table.symbol_map.get(&"KBD".to_string()).unwrap(), 24576);
+        assert_eq!(*symbol_table.symbol_map.get(&"SP".to_string()).unwrap(), 0);
+    }
+    #[test]
     fn test_file_parsing() {
         let mut symbol_table = symbol_table_setup();
         let mut asm_file = File::open("symbol_test.txt").unwrap();
@@ -438,4 +468,14 @@ mod tests {
         assert_eq!(*symbol_table.symbol_map.get(&"R0".to_string()).unwrap(), 0);
         assert_eq!(*symbol_table.symbol_map.get(&"END".to_string()).unwrap(), 11);
     }
+
+    #[test]
+    fn test_file_parsing_with_predefined() {
+        let mut symbol_table = symbol_table_setup();
+        let mut asm_file = File::open("symbol_test_3.txt").unwrap();
+        let mut intm_file = File::create("intm3.txt").unwrap();
+        symbol_table.parse_file(asm_file, intm_file);
+        assert_eq!(*symbol_table.symbol_map.get(&"i".to_string()).unwrap(), 16);
+    }
+
 }
